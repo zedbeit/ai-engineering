@@ -1,5 +1,3 @@
-"""Tests for fan_out and fetch_all_sequential. No network."""
-
 import asyncio
 
 import httpx
@@ -11,7 +9,7 @@ URLS = [f"https://example.test/posts/{i}" for i in range(1, 31)]
 
 
 async def fake_sleep(seconds: float) -> None:
-    """Stands in for asyncio.sleep so tests finish instantly."""
+    pass
 
 
 # --- worked example ---------------------------------------------------------
@@ -32,7 +30,6 @@ async def test_one_result_per_url_in_order() -> None:
 
 
 async def test_never_more_than_limit_in_flight() -> None:
-    """The important one: proves the semaphore really limits concurrency."""
     in_flight = 0  # requests inside the handler right now
     peak = 0  # the most there has ever been at once
 
@@ -52,7 +49,6 @@ async def test_never_more_than_limit_in_flight() -> None:
 
 
 async def test_one_failure_does_not_stop_the_rest() -> None:
-    """One URL always returns 500: 29 results are ok, 1 is not, nothing raises."""
     bad_url = URLS[4]
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -79,7 +75,6 @@ async def test_empty_list() -> None:
 
 
 def test_sequential_one_result_per_url() -> None:
-    """Uses httpx.Client(transport=httpx.MockTransport(handler)), no async."""
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200)
@@ -92,7 +87,6 @@ def test_sequential_one_result_per_url() -> None:
 
 
 def test_sequential_failure_is_a_result_not_an_exception() -> None:
-    """A bad status and a dead connection both come back as failed Results."""
     bad_status_url, dead_url = URLS[0], URLS[1]
 
     def handler(request: httpx.Request) -> httpx.Response:
