@@ -7,6 +7,7 @@ My work for a self-directed AI engineering curriculum (~42 weeks, 11 modules). E
 | Folder | Module | What it is |
 |---|---|---|
 | [`expense-tracker/`](expense-tracker/) | M0 · Python for AI engineering | Typed CLI expense tracker: SQLite, dataclasses, `mypy --strict`, ruff, 30 pytest tests |
+| [`async-fanout/`](async-fanout/) | M0 · Python for AI engineering | Async fan-out script: 100 API calls with httpx, at most 10 at once (semaphore), timeouts, retries with backoff; 19 pytest tests |
 
 ## Working on a project
 
