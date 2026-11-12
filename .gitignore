@@ -9,5 +9,13 @@ wheels/
 # Virtual environments
 .venv
 
+# Tool caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Local databases
+*.db
+
 # macOS
 .DS_Store
