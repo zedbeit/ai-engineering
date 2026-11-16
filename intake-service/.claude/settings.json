@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(/tests/**)",
+      "Edit(/SPEC.md)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/run-pytest.sh",
+            "timeout": 120,
+            "statusMessage": "Running pytest..."
+          }
+        ]
+      }
+    ]
+  }
+}
