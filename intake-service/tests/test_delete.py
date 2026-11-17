@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -71,3 +72,21 @@ def test_id_is_not_reused_after_a_delete(client: TestClient) -> None:
     next_id = create(client, "Receipt 16", "Data bundle")
 
     assert next_id > newest_id
+
+
+@pytest.mark.parametrize(
+    "document_id",
+    [
+        pytest.param("0", id="zero"),
+        pytest.param("-1", id="negative"),
+        pytest.param("9223372036854775808", id="just-above-sqlite-max"),
+        pytest.param("99999999999999999999", id="far-above-sqlite-max"),
+    ],
+)
+def test_delete_returns_404_for_ids_no_document_can_have(
+    client: TestClient, document_id: str
+) -> None:
+    response = client.delete(f"/documents/{document_id}")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Document not found"}

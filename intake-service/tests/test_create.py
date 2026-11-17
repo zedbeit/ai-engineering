@@ -133,3 +133,16 @@ def test_create_stores_nothing_when_rejected(client: TestClient) -> None:
 
     assert listed.status_code == 200
     assert listed.json() == []
+
+
+def test_create_counts_title_length_in_characters_not_bytes(
+    client: TestClient,
+) -> None:
+    title = "é" * 200
+
+    accepted = client.post("/documents", json={"title": title, "text": "x"})
+    rejected = client.post("/documents", json={"title": title + "é", "text": "x"})
+
+    assert accepted.status_code == 201
+    assert accepted.json()["title"] == title
+    assert rejected.status_code == 422

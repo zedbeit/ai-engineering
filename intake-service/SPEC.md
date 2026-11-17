@@ -1,5 +1,19 @@
 # Document intake service: specification
 
+## Goals
+
+What this version must achieve. The verifier checks each one.
+
+1. **Correct:** every rule in this spec holds, shown by a test or by a real request.
+2. **Protected:** breaking any rule in this spec makes at least one test fail.
+3. **Real:** it runs under Uvicorn, answers real HTTP requests, and keeps its
+    data across a restart.
+4. **Extendable:** adding `POST /documents/{id}/extract` needs a new route and
+    new code, with no rewrite of what is here.
+5. **Understood:** I can explain every line of `src/` without help.
+6. **Clean:** strict mypy and ruff pass, and there are no dependencies beyond
+    those in section 6.
+
 ## 1. Purpose and scope
 
 The intake service is a small HTTP API that stores text documents. A client can
@@ -109,7 +123,7 @@ only the two errors below and does not change FastAPI's default error format.
 
 | Status | When | Body |
 |---|---|---|
-| `404` | The id in the path is a valid integer, but no document has it. | `{"detail": "Document not found"}` |
+| `404` | The id in the path is a valid integer, but no document has it. This includes zero, negative ids and ids too large for the database to store, such as `99999999999999999999`. | `{"detail": "Document not found"}` |
 | `422` | The request is invalid: a bad body on `POST`, or an id that is not an integer. | FastAPI's default: `{"detail": [ ... ]}`, a list with one entry per problem. |
 
 Tests check the status code for `422`, not the exact wording inside `detail`.

@@ -99,3 +99,27 @@ def test_search_treats_underscore_as_an_ordinary_character(client: TestClient) -
 
     assert search_ids(client, "file_name") == [underscore_id]
     assert search_ids(client, "_") == [underscore_id]
+
+
+def test_search_results_are_ordered_by_id(client: TestClient) -> None:
+    first = create(client, "Rent receipt", "January")
+    create(client, "Salary", "February")
+    second = create(client, "Groceries", "Paid with rent money")
+    third = create(client, "Rent again", "March")
+
+    assert search_ids(client, "rent") == [first, second, third]
+
+
+def test_search_term_is_not_trimmed(client: TestClient) -> None:
+    create(client, "Rental", "car")
+    spaced_id = create(client, "Receipt", "Monthly rent paid")
+
+    assert search_ids(client, " rent") == [spaced_id]
+
+
+def test_search_treats_backslash_as_an_ordinary_character(client: TestClient) -> None:
+    create(client, "Path", "C:/files")
+    backslash_id = create(client, "Path", "C:\\files")
+
+    assert search_ids(client, "\\") == [backslash_id]
+    assert search_ids(client, "C:\\files") == [backslash_id]
