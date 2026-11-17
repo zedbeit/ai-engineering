@@ -1,0 +1,71 @@
+name: intake-service
+
+# Runs on every push and pull request that touches the intake service.
+on:
+  push:
+    paths:
+      - "intake-service/**"
+      - ".github/workflows/intake-service.yml"
+  pull_request:
+    paths:
+      - "intake-service/**"
+      - ".github/workflows/intake-service.yml"
+
+defaults:
+  run:
+    working-directory: intake-service
+
+jobs:
+  checks:
+    name: ruff, mypy, pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+          enable-cache: true
+          cache-dependency-glob: intake-service/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Format
+        run: uv run ruff format --check
+
+      - name: Type-check
+        run: uv run mypy src tests
+
+      - name: Test
+        run: uv run pytest
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: docker build -t intake-service .
+
+      - name: Start the service and send real requests
+        run: |
+          docker run -d --name intake -p 8000:8000 intake-service
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8000/documents && break
+            sleep 1
+          done
+          curl -sf -X POST http://localhost:8000/documents \
+            -H "Content-Type: application/json" \
+            -d '{"title": "Receipt 14", "text": "Rent"}'
+          curl -sf http://localhost:8000/documents/1
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/documents/999)" = 404
+
+      - name: Show the service log
+        if: always()
+        run: docker logs intake
