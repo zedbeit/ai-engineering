@@ -1,0 +1,183 @@
+diff --git a/expense-tracker/AI_TOOLING_LOG.md b/expense-tracker/AI_TOOLING_LOG.md
+index e793b8b..0482185 100644
+--- a/expense-tracker/AI_TOOLING_LOG.md
++++ b/expense-tracker/AI_TOOLING_LOG.md
+@@ -33,3 +33,25 @@ Tools: Claude in the claude.ai chat (planning and skeleton), then Claude Code in
+ 
+ - The bugs Claude found were mostly ones that hadn't run yet: Python only fails on a line when it executes it. Running the tests after each small change catches them sooner.
+ - **To do:** rewrite `cli.py` and `tests/test_cli.py` from memory without AI, since Claude wrote most of the final version of that layer.
++
++## 2026-11-18: `list --category`
++
++Tool: Claude Code in the terminal.
++
++### What the AI did
++
++- **Wrote the whole feature** at my request: an optional `category` parameter on `ExpenseStore.list_all` (filtered in SQL with `WHERE category = ?`), a `--category` option on the `list` subcommand, and a separate "No expenses in category ..." message when the filter matches nothing.
++- **Wrote all four new tests**: one in `tests/test_storage.py` and three in `tests/test_cli.py` (filter shows only that category, no matches, no flag still shows everything).
++- Updated the README usage section.
++
++### What I wrote
++
++- Nothing for this feature.
++
++### How the output was checked
++
++- `uv run pytest` (34 passed, up from 30), `uv run ruff check .` and `uv run mypy .` (strict) all clean.
++
++### Notes
++
++- The match is exact and case-sensitive: `--category Food` won't find `food`.
+diff --git a/expense-tracker/README.md b/expense-tracker/README.md
+index 92d0cc8..4111573 100644
+--- a/expense-tracker/README.md
++++ b/expense-tracker/README.md
+@@ -10,6 +10,7 @@ uv sync
+ uv run expense add 12.50 food --date 2026-11-10 --description "lunch"
+ uv run expense add 3.20 transport            # --date defaults to today
+ uv run expense list
++uv run expense list --category food       # only that category
+ uv run expense summary --month 2026-11
+ uv run expense delete 3
+ ```
+@@ -33,7 +34,7 @@ The code is in three layers, each tested on its own:
+ | File | Job |
+ |---|---|
+ | `src/expense_tracker/models.py` | The frozen `Expense` dataclass and all input parsing and validation |
+-| `src/expense_tracker/storage.py` | `ExpenseStore`: add, list, delete and monthly summary in SQLite |
++| `src/expense_tracker/storage.py` | `ExpenseStore`: add, list (optionally by category), delete and monthly summary in SQLite |
+ | `src/expense_tracker/cli.py` | argparse subcommands; `main(argv, db_path) -> int` |
+ 
+ The main decisions:
+diff --git a/expense-tracker/src/expense_tracker/cli.py b/expense-tracker/src/expense_tracker/cli.py
+index b938ed4..2ea09e8 100644
+--- a/expense-tracker/src/expense_tracker/cli.py
++++ b/expense-tracker/src/expense_tracker/cli.py
+@@ -27,7 +27,8 @@ def build_parser() -> argparse.ArgumentParser:
+     add_parser.add_argument("--description", type=str, default="")
+ 
+     # List command
+-    subparsers.add_parser("list")
++    list_parser = subparsers.add_parser("list")
++    list_parser.add_argument("--category", type=str, default=None)
+ 
+     # Summary command
+     summary_parser = subparsers.add_parser("summary")
+@@ -53,9 +54,12 @@ def cmd_add(store: ExpenseStore, args: argparse.Namespace) -> int:
+ 
+ 
+ def cmd_list(store: ExpenseStore, args: argparse.Namespace) -> int:
+-    expenses = store.list_all()
++    expenses = store.list_all(category=args.category)
+     if not expenses:
+-        print("No expenses yet.")
++        if args.category is None:
++            print("No expenses yet.")
++        else:
++            print(f"No expenses in category {args.category!r}.")
+     for expense in expenses:
+         print(
+             f"{expense.id}: {expense.spent_on} {expense.amount} "
+diff --git a/expense-tracker/src/expense_tracker/storage.py b/expense-tracker/src/expense_tracker/storage.py
+index 775291b..2f31b2d 100644
+--- a/expense-tracker/src/expense_tracker/storage.py
++++ b/expense-tracker/src/expense_tracker/storage.py
+@@ -48,15 +48,27 @@ class ExpenseStore:
+         self._conn.commit()
+         return dataclasses.replace(expense, id=new_id)
+ 
+-    def list_all(self) -> list[Expense]:
++    def list_all(self, category: str | None = None) -> list[Expense]:
++        """Return all expenses, or only those in `category` if one is given."""
+         cursor = self._conn.cursor()
+-        cursor.execute(
+-            """
+-            SELECT id, amount_cents, category, description, spent_on
+-            FROM expenses
+-            ORDER BY spent_on ASC
+-            """
+-        )
++        if category is None:
++            cursor.execute(
++                """
++                SELECT id, amount_cents, category, description, spent_on
++                FROM expenses
++                ORDER BY spent_on ASC
++                """
++            )
++        else:
++            cursor.execute(
++                """
++                SELECT id, amount_cents, category, description, spent_on
++                FROM expenses
++                WHERE category = ?
++                ORDER BY spent_on ASC
++                """,
++                (category,),
++            )
+         rows = cursor.fetchall()
+         return [
+             Expense(
+diff --git a/expense-tracker/tests/test_cli.py b/expense-tracker/tests/test_cli.py
+index fac1c97..0bc957d 100644
+--- a/expense-tracker/tests/test_cli.py
++++ b/expense-tracker/tests/test_cli.py
+@@ -78,3 +78,43 @@ def test_unknown_command_exits_2(tmp_path: Path) -> None:
+     with pytest.raises(SystemExit) as e:
+         main(["fly"], db_path=tmp_path / "t.db")
+     assert e.value.code == 2
++
++
++def test_list_category_shows_only_that_category(
++    tmp_path: Path, capsys: pytest.CaptureFixture[str]
++) -> None:
++    db = tmp_path / "t.db"
++    main(["add", "12.50", "food", "--date", "2026-11-10"], db_path=db)
++    main(["add", "3.20", "transport", "--date", "2026-11-11"], db_path=db)
++    capsys.readouterr()  # discard the "Added ..." lines
++
++    assert main(["list", "--category", "food"], db_path=db) == 0
++    out = capsys.readouterr().out
++    assert "food" in out
++    assert "12.50" in out
++    assert "transport" not in out
++
++
++def test_list_category_with_no_matches(
++    tmp_path: Path, capsys: pytest.CaptureFixture[str]
++) -> None:
++    db = tmp_path / "t.db"
++    main(["add", "12.50", "food", "--date", "2026-11-10"], db_path=db)
++    capsys.readouterr()
++
++    assert main(["list", "--category", "rent"], db_path=db) == 0
++    assert "No expenses in category 'rent'." in capsys.readouterr().out
++
++
++def test_list_without_category_shows_everything(
++    tmp_path: Path, capsys: pytest.CaptureFixture[str]
++) -> None:
++    db = tmp_path / "t.db"
++    main(["add", "12.50", "food", "--date", "2026-11-10"], db_path=db)
++    main(["add", "3.20", "transport", "--date", "2026-11-11"], db_path=db)
++    capsys.readouterr()
++
++    assert main(["list"], db_path=db) == 0
++    out = capsys.readouterr().out
++    assert "food" in out
++    assert "transport" in out
+diff --git a/expense-tracker/tests/test_storage.py b/expense-tracker/tests/test_storage.py
+index 49630ac..99622c2 100644
+--- a/expense-tracker/tests/test_storage.py
++++ b/expense-tracker/tests/test_storage.py
+@@ -70,3 +70,10 @@ def test_delete_existing(store: ExpenseStore) -> None:
+ 
+ def test_delete_missing_returns_false(store: ExpenseStore) -> None:
+     assert not store.delete(999)
++
++
++def test_list_filters_by_category(store: ExpenseStore) -> None:
++    food = store.add(Expense(Decimal("12.50"), "food", date(2026, 11, 10)))
++    store.add(Expense(Decimal("5.00"), "transport", date(2026, 11, 11)))
++    assert store.list_all(category="food") == [food]
++    assert store.list_all(category="rent") == []

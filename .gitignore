@@ -19,3 +19,9 @@ wheels/
 
 # macOS
 .DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Claude Code trace recordings (raw: contain system details, never commit)
+.claude-trace/
